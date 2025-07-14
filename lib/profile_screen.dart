@@ -1,56 +1,63 @@
+// profile_screen.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'auth_service.dart';
-
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  late TextEditingController nombre;
-  late TextEditingController apellido;
+  Future<Map<String, dynamic>?> _getUserData() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
 
-  @override
-  void initState() {
-    super.initState();
-    nombre = TextEditingController();
-    apellido = TextEditingController();
-    context.read<AuthService>().loadProfile().then((data) {
-      if (data != null) {
-        nombre.text = data['nombre'] ?? '';
-        apellido.text = data['apellido'] ?? '';
-        setState(() {});
-      }
-    });
+    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    return doc.data();
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacementNamed(context, '/');
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.read<AuthService>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Perfil'), actions: [
-        IconButton(icon: const Icon(Icons.logout), onPressed: auth.logout),
-      ]),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(children: [
-          TextField(controller: nombre, decoration: const InputDecoration(labelText: 'Nombre')),
-          TextField(controller: apellido, decoration: const InputDecoration(labelText: 'Apellido')),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () async {
-              await auth.saveProfile({
-                'nombre': nombre.text,
-                'apellido': apellido.text,
-              });
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
-            },
-            child: const Text('Guardar'),
-          ),
-        ]),
+      appBar: AppBar(
+        title: const Text('Mi Perfil'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => _logout(context),
+          )
+        ],
+      ),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: _getUserData(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final data = snapshot.data;
+          if (data == null) return const Center(child: Text('Datos no encontrados'));
+
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: ListView(
+              children: [
+                Text('Nombre: ${data['nombre']}'),
+                Text('Apellido: ${data['apellido']}'),
+                Text('DNI: ${data['dni']}'),
+                Text('Barrio: ${data['barrio zona']}'),
+                Text('Bio: ${data['bio']}'),
+                const SizedBox(height: 10),
+                const Text('Preferencias:'),
+                ...List.from(data['preferencias'] ?? []).map((p) => Text('- $p')),
+                const SizedBox(height: 10),
+                Text('Rating: ${data['rating y posible match']}'),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
